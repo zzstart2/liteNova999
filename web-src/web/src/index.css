@@ -1,0 +1,789 @@
+/* ===== LiteNova Brand Theme ===== */
+:root {
+  --ln-primary: #6366f1;
+  --ln-primary-dark: #4f46e5;
+  --ln-primary-light: #818cf8;
+  --ln-accent: #22d3ee;
+  --ln-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+  --ln-gradient-hero: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --ln-text: #1e1b4b;
+  --ln-text-secondary: #64748b;
+  --ln-bg: #f8fafc;
+  --ln-card-bg: #ffffff;
+  --ln-card-shadow: 0 1px 3px rgba(99, 102, 241, 0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --ln-card-shadow-hover: 0 10px 30px rgba(99, 102, 241, 0.15);
+  --ln-radius: 12px;
+  --ln-font-en: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  --ln-font-zh: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+body {
+  margin: 0;
+  padding-top: 60px;
+  overflow-y: scroll;
+  font-family: var(--ln-font-zh);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-width: none;
+  background: var(--ln-bg);
+  color: var(--ln-text);
+}
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+code {
+  font-family: 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* ===== Navigation Override ===== */
+.ui.menu {
+  background: rgba(255,255,255,0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: none !important;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.08) !important;
+}
+
+.ui.menu .item {
+  font-family: var(--ln-font-en) !important;
+  transition: color 0.2s ease !important;
+}
+
+.ui.menu .item:hover {
+  color: var(--ln-primary) !important;
+}
+
+.ui.menu .active.item {
+  color: var(--ln-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* ===== Buttons ===== */
+.ui.button,
+.ui.primary.button,
+.ui.button[style*="background: #2F73FF"],
+.ui.button[style*="background:#2F73FF"] {
+  border-radius: 8px !important;
+  font-family: var(--ln-font-en) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.ui.primary.button,
+.ui.button[style*="background: #2F73FF"],
+.ui.button[style*="background:#2F73FF"] {
+  background: var(--ln-gradient) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+}
+
+.ui.primary.button:hover,
+.ui.button[style*="background: #2F73FF"]:hover,
+.ui.button[style*="background:#2F73FF"]:hover {
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ===== Cards ===== */
+.ui.card,
+.chart-card {
+  border-radius: var(--ln-radius) !important;
+  box-shadow: var(--ln-card-shadow) !important;
+  border: 1px solid rgba(99, 102, 241, 0.06) !important;
+  transition: box-shadow 0.3s ease, transform 0.3s ease !important;
+}
+
+.ui.card:hover,
+.chart-card:hover {
+  box-shadow: var(--ln-card-shadow-hover) !important;
+}
+
+/* ===== Form Inputs ===== */
+.ui.input input,
+.ui.form input,
+.ui.form textarea,
+.ui.selection.dropdown {
+  border-radius: 8px !important;
+  border-color: #e2e8f0 !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.ui.input input:focus,
+.ui.form input:focus,
+.ui.form textarea:focus,
+.ui.selection.dropdown:focus {
+  border-color: var(--ln-primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+/* ===== Links ===== */
+a {
+  color: var(--ln-primary);
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--ln-primary-dark);
+}
+
+/* ===== Tables ===== */
+.ui.table thead th {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: var(--ln-text) !important;
+  font-weight: 600 !important;
+  font-family: var(--ln-font-en) !important;
+}
+
+.ui.table tbody tr:hover {
+  background: rgba(99, 102, 241, 0.03) !important;
+}
+
+/* ===== Segments ===== */
+.ui.segment {
+  border-radius: var(--ln-radius) !important;
+  border: 1px solid rgba(99, 102, 241, 0.06) !important;
+  box-shadow: var(--ln-card-shadow) !important;
+}
+
+/* ===== Labels / Tags ===== */
+.ui.label {
+  border-radius: 6px !important;
+}
+
+/* ===== Dropdown ===== */
+.ui.dropdown .menu {
+  border-radius: 8px !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.12) !important;
+  border: 1px solid rgba(99, 102, 241, 0.08) !important;
+}
+
+/* ===== Hero Section (Home Page) ===== */
+.litenova-hero {
+  background: var(--ln-gradient-hero);
+  padding: 80px 20px 60px;
+  text-align: center;
+  margin: -60px -20px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.litenova-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse at 30% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+              radial-gradient(ellipse at 50% 80%, rgba(34, 211, 238, 0.08) 0%, transparent 50%);
+  animation: heroGlow 8s ease-in-out infinite alternate;
+}
+
+@keyframes heroGlow {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-2%, -2%); }
+}
+
+.litenova-hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.litenova-logo-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.litenova-logo-icon {
+  width: 56px;
+  height: 56px;
+  background: var(--ln-gradient);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+
+.litenova-logo-icon::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  background: var(--ln-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+
+.litenova-logo-text-hero {
+  font-family: 'Poppins', sans-serif;
+  font-size: 42px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.litenova-slogan {
+  font-size: 20px;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 32px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.litenova-hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.litenova-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: var(--ln-gradient);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--ln-font-en);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.litenova-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+  color: white;
+}
+
+.litenova-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  font-family: var(--ln-font-en);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+}
+
+.litenova-btn-secondary:hover {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* ===== Features Section ===== */
+.litenova-features {
+  padding: 20px 0 40px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.litenova-section-title {
+  font-family: var(--ln-font-en);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ln-text);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.litenova-section-subtitle {
+  text-align: center;
+  color: var(--ln-text-secondary);
+  font-size: 16px;
+  margin-bottom: 40px;
+}
+
+.litenova-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  padding: 0 20px;
+}
+
+.litenova-feature-card {
+  background: var(--ln-card-bg);
+  border-radius: var(--ln-radius);
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: var(--ln-card-shadow);
+  border: 1px solid rgba(99, 102, 241, 0.06);
+  transition: all 0.3s ease;
+}
+
+.litenova-feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ln-card-shadow-hover);
+}
+
+.litenova-feature-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.1) 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.litenova-feature-title {
+  font-family: var(--ln-font-en);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ln-text);
+  margin-bottom: 8px;
+}
+
+.litenova-feature-desc {
+  color: var(--ln-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ===== Quick Start Section ===== */
+.litenova-quickstart {
+  padding: 40px 0 60px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.litenova-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  padding: 0 20px;
+}
+
+.litenova-step {
+  text-align: center;
+  position: relative;
+}
+
+.litenova-step-number {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  background: var(--ln-gradient);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.litenova-step-title {
+  font-family: var(--ln-font-en);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ln-text);
+  margin-bottom: 8px;
+}
+
+.litenova-step-desc {
+  color: var(--ln-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ===== Models Section ===== */
+.litenova-models {
+  padding: 20px 0 60px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.litenova-model-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--ln-card-bg);
+  border-radius: var(--ln-radius);
+  overflow: hidden;
+  box-shadow: var(--ln-card-shadow);
+  margin: 0 auto;
+}
+
+.litenova-model-table th {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  padding: 14px 20px;
+  font-family: var(--ln-font-en);
+  font-weight: 600;
+  font-size: 14px;
+  text-align: left;
+}
+
+.litenova-model-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: var(--ln-text);
+}
+
+.litenova-model-table tr:last-child td {
+  border-bottom: none;
+}
+
+.litenova-model-table tr:hover td {
+  background: rgba(99, 102, 241, 0.03);
+}
+
+.litenova-model-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--ln-font-en);
+}
+
+.litenova-model-badge.basic {
+  background: rgba(34, 211, 238, 0.1);
+  color: #0891b2;
+}
+
+.litenova-model-badge.plus {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+}
+
+.litenova-model-badge.max {
+  background: rgba(139, 92, 246, 0.1);
+  color: #7c3aed;
+}
+
+.litenova-model-badge.long {
+  background: rgba(244, 63, 94, 0.1);
+  color: #e11d48;
+}
+
+/* ===== Footer Override ===== */
+.litenova-footer {
+  background: #1e1b4b;
+  color: rgba(255,255,255,0.7);
+  padding: 40px 20px;
+  text-align: center;
+  margin-top: 40px;
+}
+
+.litenova-footer a {
+  color: var(--ln-accent);
+}
+
+.litenova-footer a:hover {
+  color: #67e8f9;
+}
+
+.litenova-footer-brand {
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+
+.litenova-footer-links {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.litenova-footer-copy {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 16px;
+}
+
+/* ===== Login/Register Brand ===== */
+.litenova-auth-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.litenova-auth-logo-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--ln-gradient);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+}
+
+.litenova-auth-logo-icon::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  background: var(--ln-accent);
+  border-radius: 50%;
+}
+
+.litenova-auth-logo-text {
+  font-family: 'Poppins', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  background: var(--ln-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== Header Logo ===== */
+.litenova-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.litenova-nav-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--ln-gradient);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+}
+
+.litenova-nav-logo-icon::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--ln-accent);
+  border-radius: 50%;
+}
+
+.litenova-nav-logo-text {
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  background: var(--ln-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+  padding: 4px;
+}
+
+.small-icon .icon {
+  font-size: 1em !important;
+}
+
+.custom-footer {
+  font-size: 1.1em;
+}
+
+/* ===== Responsive ===== */
+@media only screen and (max-width: 600px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  body {
+    padding-top: 55px;
+  }
+  
+  .ui.container {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 10px !important;
+  }
+
+  .ui.card, 
+  .ui.cards,
+  .ui.segment {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .ui.table {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .litenova-hero {
+    padding: 60px 16px 40px;
+    margin: -55px -10px 24px;
+  }
+
+  .litenova-logo-text-hero {
+    font-size: 28px;
+  }
+
+  .litenova-slogan {
+    font-size: 16px;
+  }
+
+  .litenova-features-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 0 16px;
+  }
+
+  .litenova-steps {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 0 16px;
+  }
+
+  .litenova-model-table {
+    font-size: 13px;
+  }
+
+  .litenova-model-table th,
+  .litenova-model-table td {
+    padding: 10px 12px;
+  }
+
+  .litenova-hero-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .litenova-btn-primary,
+  .litenova-btn-secondary {
+    width: 100%;
+    max-width: 280px;
+    justify-content: center;
+  }
+
+  .litenova-section-title {
+    font-size: 22px;
+  }
+}
+
+/* 小屏笔记本 */
+@media screen and (min-width: 769px) and (max-width: 1366px) {
+  .ui.container {
+    width: auto !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 24px !important;
+  }
+
+  .ui.table {
+    font-size: 0.9em;
+  }
+
+  .ui.cards {
+    margin-left: -0.5em !important;
+    margin-right: -0.5em !important;
+  }
+
+  .ui.cards > .card {
+    margin: 0.5em !important;
+    width: calc(50% - 1em) !important;
+  }
+}
+
+/* 大屏幕 */
+@media screen and (min-width: 1367px) {
+  .ui.container {
+    width: 1200px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 !important;
+  }
+}
+
+/* Dashboard 优化 */
+@media screen and (max-width: 1366px) {
+  .charts-grid {
+    margin: 0 -0.5em !important;
+  }
+
+  .charts-grid .column {
+    padding: 0.5em !important;
+  }
+
+  .chart-card {
+    margin: 0 !important;
+  }
+
+  .ui.header {
+    font-size: 1.1em !important;
+  }
+
+  .stat-value {
+    font-size: 0.9em !important;
+  }
+}
+
+/* ===== Toastify override ===== */
+.Toastify__toast {
+  border-radius: 10px !important;
+  font-family: var(--ln-font-zh) !important;
+}
+
+/* ===== Dashboard page ===== */
+.dashboard-container .chart-card {
+  border-radius: var(--ln-radius) !important;
+}

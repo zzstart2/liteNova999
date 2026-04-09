@@ -1,0 +1,197 @@
+.dashboard-container {
+    padding: 20px 24px 40px;
+    background-color: #ffffff;
+    margin-top: -15px;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.stat-cards-grid {
+    margin-bottom: 0.5rem !important;
+}
+
+.stat-cards-grid .column {
+    padding: 0.5rem !important;
+}
+
+.summary-stat-card {
+    border: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+    padding: 20px 24px !important;
+    color: white !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.summary-stat-card .statistic .label {
+    font-size: 0.9em !important;
+    text-transform: none !important;
+}
+
+.summary-stat-card .statistic .value {
+    font-size: 1.6em !important;
+    margin-top: 4px !important;
+}
+
+.stat-sub {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85em;
+    margin-top: 4px;
+}
+
+.charts-grid {
+    margin-bottom: 1rem !important;
+}
+
+.charts-grid .column {
+    padding: 0.5rem !important;
+}
+
+.chart-card {
+    height: 100%;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+    border: none !important;
+    border-radius: 16px !important;
+    padding: 8px !important;
+}
+
+.chart-container {
+    margin-top: 2px;
+    padding: 16px;
+    background-color: white;
+    border-radius: 12px;
+}
+
+.ui.card > .content > .header {
+    color: #2B3674;
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    gap: 12px;
+}
+
+.stat-value {
+    color: #4318FF;
+    font-weight: bold;
+    font-size: 1.1em;
+    background: rgba(67, 24, 255, 0.1);
+    padding: 4px 12px;
+    border-radius: 8px;
+    white-space: nowrap;
+    margin-left: 16px;
+}
+
+/* Rate Limit Config Page */
+.rate-limit-container {
+    padding: 20px 24px 40px;
+    background-color: #ffffff;
+    margin-top: -15px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.rate-limit-card {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+    border: none !important;
+    border-radius: 16px !important;
+    padding: 8px !important;
+    margin-bottom: 16px !important;
+}
+
+.rate-limit-card .header {
+    color: #2B3674 !important;
+    font-weight: 600 !important;
+}
+
+.group-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: white;
+}
+
+.group-badge.basic { background: #00B5D8; }
+.group-badge.standard { background: #4318FF; }
+.group-badge.premium { background: #FF5E7D; }
+.group-badge.admin { background: #05CD99; }
+.group-badge.default { background: #A3AED0; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 10px 16px;
+        max-width: 100%;
+    }
+
+    .chart-container {
+        padding: 12px;
+    }
+
+    .charts-grid .column {
+        padding: 0.25rem !important;
+    }
+
+    .summary-stat-card .statistic .value {
+        font-size: 1.3em !important;
+    }
+
+    .rate-limit-container {
+        padding: 10px 16px;
+        max-width: 100%;
+    }
+}
+
+/* Log detail modal styles */
+.log-detail-modal {
+    max-width: 700px !important;
+}
+
+.log-detail-item {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.log-detail-label {
+    font-weight: 600;
+    color: #2B3674;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.log-detail-value {
+    color: #555;
+    word-break: break-all;
+}
+
+/* Settings tab style */
+.settings-tab {
+    margin-top: 1rem !important;
+    border-bottom: none !important;
+}
+
+.settings-tab .item {
+    color: #000 !important;
+    font-weight: 500 !important;
+    padding: 0.8rem 1.2rem !important;
+}
+
+.settings-tab .active.item {
+    color: #000 !important;
+    font-weight: 600 !important;
+    border-color: #000 !important;
+}
+
+.ui.tab.segment {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 1rem 0 !important;
+}
