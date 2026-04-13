@@ -1,0 +1,34 @@
+# PRJ-LITE999-T-018 — fail2ban Configuration
+# Deploy to: /etc/fail2ban/jail.local
+
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+backend = auto
+banaction = iptables-multiport
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+maxretry = 3
+bantime = 86400
+findtime = 300
+
+[nginx-limit-req]
+enabled = true
+filter = nginx-limit-req
+action = iptables-multiport[name=nginx-limit-req, port="http,https"]
+logpath = /var/log/nginx/error.log
+findtime = 60
+maxretry = 10
+bantime = 3600
+
+[nginx-http-auth]
+enabled = true
+filter = nginx-http-auth
+action = iptables-multiport[name=nginx-http-auth, port="http,https"]
+logpath = /var/log/nginx/error.log
+maxretry = 5
+bantime = 3600

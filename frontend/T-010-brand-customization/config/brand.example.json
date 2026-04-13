@@ -1,0 +1,96 @@
+{
+  "$schema": "./brand.schema.json",
+  "$comment": "示例：白标品牌配置 — 某客户定制",
+
+  "meta": {
+    "id": "acme-corp",
+    "version": "1.0.0",
+    "tenantId": "tenant-acme-001"
+  },
+
+  "color": {
+    "colors": {
+      "primary": "#0d9488",
+      "secondary": "#7c3aed",
+      "accent": "#e11d48",
+      "success": "#16a34a",
+      "warning": "#ea580c",
+      "danger": "#dc2626",
+      "info": "#0284c7",
+      "neutral": "#737373"
+    },
+    "light": {
+      "background": "#fafaf9",
+      "surface": "#f5f5f4"
+    },
+    "dark": {
+      "background": "#0c0a09",
+      "surface": "#1c1917"
+    },
+    "borderRadius": 12,
+    "generatePalettes": true
+  },
+
+  "logo": {
+    "full": {
+      "src": "https://cdn.example.com/acme/logo-full.svg",
+      "type": "url",
+      "width": 160,
+      "height": 40,
+      "alt": "Acme Corporation"
+    },
+    "icon": {
+      "src": "https://cdn.example.com/acme/logo-icon.svg",
+      "type": "url",
+      "width": 32,
+      "height": 32,
+      "alt": "Acme"
+    },
+    "dark": {
+      "full": {
+        "src": "https://cdn.example.com/acme/logo-full-white.svg",
+        "type": "url",
+        "alt": "Acme Corporation"
+      }
+    },
+    "favicon": "https://cdn.example.com/acme/favicon.ico"
+  },
+
+  "text": {
+    "brandName": "Acme Corporation",
+    "slogan": "Building Tomorrow, Today",
+    "copyright": "© {year} {brandName}. Powered by Lite999.",
+    "appName": "Acme Platform",
+    "appDescription": "Enterprise management platform by Acme Corp.",
+    "texts": {
+      "nav": {
+        "home": "Dashboard",
+        "about": "About Acme",
+        "contact": "Support"
+      },
+      "footer": {
+        "copyright": "© {year} {brandName}. All rights reserved.",
+        "terms": "Legal Terms",
+        "privacy": "Data Privacy"
+      },
+      "auth": {
+        "login": "Log In to Acme",
+        "logout": "Log Out",
+        "register": "Join Acme"
+      },
+      "welcome": {
+        "title": "Welcome to {appName}",
+        "subtitle": "Your enterprise command center"
+      }
+    }
+  },
+
+  "themeMode": "auto",
+
+  "customCssVars": {
+    "--brand-font-family": "'Inter', system-ui, sans-serif",
+    "--brand-font-size-base": "14px",
+    "--brand-shadow-sm": "0 1px 2px rgba(0,0,0,0.05)",
+    "--brand-shadow-md": "0 4px 6px -1px rgba(0,0,0,0.1)"
+  }
+}

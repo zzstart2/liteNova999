@@ -1,0 +1,124 @@
+/* liteNova999 Design System — Global Styles */
+
+/* Theme transition class (added/removed by theme-manager.ts) */
+.ln-theme-transition,
+.ln-theme-transition *,
+.ln-theme-transition *::before,
+.ln-theme-transition *::after {
+  transition: background-color var(--duration-slow) var(--ease-in-out),
+              color var(--duration-slow) var(--ease-in-out),
+              border-color var(--duration-slow) var(--ease-in-out),
+              box-shadow var(--duration-slow) var(--ease-in-out) !important;
+}
+
+/* Body */
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--font-regular);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-page);
+  line-height: var(--leading-normal);
+}
+
+/* Headings */
+h1 {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  line-height: 40px;
+  letter-spacing: var(--tracking-tight);
+}
+
+h2 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  line-height: 36px;
+}
+
+h3 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  line-height: 32px;
+}
+
+h4 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  line-height: 28px;
+}
+
+/* Links */
+a {
+  color: var(--color-primary-500);
+  text-decoration: none;
+  transition: color var(--duration-normal) var(--ease-out);
+}
+
+a:hover {
+  color: var(--color-primary-600);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Code */
+code, pre {
+  font-family: var(--font-mono);
+}
+
+code {
+  font-size: 0.875em;
+  padding: 0.125em 0.375em;
+  background: var(--color-neutral-100);
+  border-radius: var(--radius-sm);
+}
+
+pre {
+  padding: var(--space-4);
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary-200);
+  color: var(--color-primary-900);
+}
+
+/* Scrollbar (Webkit) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-400);
+}
+
+/* Dark mode scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-600);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-500);
+}
+
+/* Focus ring utility */
+.ln-focus-ring:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}

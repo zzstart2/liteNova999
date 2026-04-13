@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "id": "default",
+    "version": "1.0.0"
+  },
+  "color": {
+    "colors": {
+      "primary": "#3b82f6",
+      "secondary": "#8b5cf6",
+      "accent": "#f59e0b",
+      "success": "#22c55e",
+      "warning": "#f97316",
+      "danger": "#ef4444",
+      "info": "#06b6d4",
+      "neutral": "#6b7280"
+    },
+    "borderRadius": 8,
+    "generatePalettes": true
+  },
+  "logo": {
+    "full": {
+      "src": "/logo.svg",
+      "type": "url",
+      "alt": "Lite999"
+    },
+    "icon": {
+      "src": "/icon.svg",
+      "type": "url",
+      "alt": "Lite999 Icon"
+    }
+  },
+  "text": {
+    "brandName": "Lite999",
+    "slogan": "Lightweight Solutions, Infinite Possibilities",
+    "copyright": "© {year} {brandName}. All rights reserved.",
+    "appName": "Lite999 Platform",
+    "appDescription": "A modern, configurable web platform.",
+    "texts": {
+      "nav": {
+        "home": "Home",
+        "about": "About",
+        "contact": "Contact"
+      },
+      "footer": {
+        "copyright": "© {year} {brandName}. All rights reserved.",
+        "terms": "Terms of Service",
+        "privacy": "Privacy Policy"
+      },
+      "auth": {
+        "login": "Sign In",
+        "logout": "Sign Out",
+        "register": "Create Account"
+      }
+    }
+  },
+  "themeMode": "light"
+}

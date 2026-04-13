@@ -1,0 +1,19 @@
+# PRJ-LITE999-T-018 — SSH Hardening Patch
+# Apply: sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && sudo patch -b /etc/ssh/sshd_config < sshd_config.patch
+# Or use the deploy script which applies changes line by line.
+
+--- /etc/ssh/sshd_config.orig
++++ /etc/ssh/sshd_config
+@@ SSH Hardening @@
+-PermitRootLogin yes
++PermitRootLogin prohibit-password
+-PasswordAuthentication yes
++PasswordAuthentication no
++PubkeyAuthentication yes
++MaxAuthTries 3
++LoginGraceTime 30
++ClientAliveInterval 300
++ClientAliveCountMax 2
++X11Forwarding no
++AllowTcpForwarding no
++PermitEmptyPasswords no

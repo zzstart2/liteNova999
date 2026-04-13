@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- LITE999 Icon Only — favicons, app icons, avatars -->
+  <defs>
+    <linearGradient id="icon-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#667FFF"/>
+      <stop offset="100%" stop-color="#3354FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="4" width="10" height="36" rx="3" fill="url(#icon-grad)"/>
+  <rect x="8" y="30" width="28" height="10" rx="3" fill="url(#icon-grad)"/>
+  <circle cx="40" cy="35" r="5" fill="#3354FF"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <!-- LITE999 Mono White Logo — for dark/colored backgrounds -->
+  <rect x="4" y="4" width="10" height="36" rx="3" fill="#FFFFFF"/>
+  <rect x="4" y="30" width="28" height="10" rx="3" fill="#FFFFFF"/>
+  <circle cx="36" cy="35" r="5" fill="#FFFFFF"/>
+  <text x="50" y="34" font-family="Inter, Source Han Sans SC, sans-serif" font-size="26" font-weight="700" fill="#FFFFFF" letter-spacing="-0.5">
+    LITE999
+  </text>
+</svg>

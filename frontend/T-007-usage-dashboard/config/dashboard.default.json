@@ -1,0 +1,11 @@
+{
+  "autoRefreshInterval": 60,
+  "defaultRange": "30d",
+  "defaultGranularity": "daily",
+  "topN": 10,
+  "currency": "$",
+  "costPrecision": 2,
+  "showProjectedCost": true,
+  "sparklinePoints": 14,
+  "quotaToUsdRate": 0.000002
+}

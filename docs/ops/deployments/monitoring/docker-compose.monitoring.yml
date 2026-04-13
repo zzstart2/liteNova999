@@ -1,0 +1,176 @@
+# PRJ-LITE999-T-017 — Monitoring Stack (Prometheus + Grafana + Alertmanager)
+# Deploy alongside the main docker-compose.prod.yml
+#
+# Usage:
+#   cd /opt/new-api
+#   docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
+#
+# Or standalone:
+#   docker compose -f docker-compose.monitoring.yml up -d
+
+version: '3.8'
+
+services:
+  # ===== Prometheus =====
+  prometheus:
+    image: prom/prometheus:v2.53.4
+    container_name: new-api-prometheus
+    restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=500MB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert-rules.yml:/etc/prometheus/rules/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 200M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # ===== Grafana =====
+  grafana:
+    image: grafana/grafana-oss:11.6.0
+    container_name: new-api-grafana
+    restart: always
+    ports:
+      - "127.0.0.1:3099:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3099
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # ===== Alertmanager =====
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: new-api-alertmanager
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--data.retention=72h'
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+  # ===== Node Exporter (host metrics) =====
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    container_name: new-api-node-exporter
+    restart: always
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--no-collector.ipvs'
+      - '--no-collector.btrfs'
+      - '--no-collector.infiniband'
+      - '--no-collector.xfs'
+      - '--no-collector.zfs'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 32M
+        reservations:
+          cpus: '0.01'
+          memory: 8M
+
+  # ===== PostgreSQL Exporter =====
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: new-api-pg-exporter
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: "postgresql://newapi:${PG_PASSWORD}@new-api-pg:5432/newapi?sslmode=disable"
+    networks:
+      - backend
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 32M
+        reservations:
+          cpus: '0.01'
+          memory: 8M
+
+  # ===== Redis Exporter =====
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: new-api-redis-exporter
+    restart: always
+    environment:
+      REDIS_ADDR: "redis://new-api-redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    networks:
+      - backend
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 32M
+        reservations:
+          cpus: '0.01'
+          memory: 8M
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+networks:
+  backend:
+    external: true
+    name: new-api_backend

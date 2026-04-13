@@ -1,0 +1,1094 @@
+From 6584727e28794187a64eca49295c2dbffadef8c7 Mon Sep 17 00:00:00 2001
+From: zzstart2 <zzstart2@example.com>
+Date: Fri, 10 Apr 2026 14:48:25 +0800
+Subject: [PATCH 1/2] feat(T-006): enhance QuotaData model with cost, model
+ dimension, and time-series fields
+
+Extends the quota_data statistics table to support richer analytics:
+
+Cost dimension:
+- prompt_tokens / completion_tokens (split from total token_used)
+- model_ratio / completion_ratio (pricing multipliers at time of request)
+
+Model dimension:
+- channel_id (which upstream channel served the request)
+- group (user group for group-level analytics)
+
+Time-series data:
+- avg_use_time / max_use_time / total_use_time (latency tracking in ms)
+- stream_count (how many requests used streaming)
+- error_count (failed requests within the aggregation window)
+
+Implementation details:
+- New LogQuotaDataParams struct and LogQuotaDataEx entry point for full params
+- Legacy LogQuotaData preserved for backward compatibility
+- Cache key extended with channel_id + group for finer-grained aggregation
+- increaseQuotaData uses cross-DB-compatible CASE WHEN for max_use_time
+- All RecordConsumeLog call sites updated to pass ModelRatio/CompletionRatio
+- Aggregate queries (GetAllQuotaDates, GetQuotaDataGroupByUser) updated
+  to include new fields with proper SUM/AVG calculations
+- GORM AutoMigrate handles schema migration for all 3 DB backends
+---
+ controller/channel-test.go |   2 +
+ model/log.go               |  19 +++-
+ model/usedata.go           | 189 +++++++++++++++++++++++++++++++------
+ relay/mjproxy_handler.go   |  34 +++----
+ service/quota.go           |   4 +
+ service/task_billing.go    |  18 ++--
+ service/text_quota.go      |   2 +
+ 7 files changed, 212 insertions(+), 56 deletions(-)
+
+diff --git a/controller/channel-test.go b/controller/channel-test.go
+index bdd67d2..b79bef6 100644
+--- a/controller/channel-test.go
++++ b/controller/channel-test.go
+@@ -495,6 +495,8 @@ func testChannel(channel *model.Channel, testModel string, endpointType string,
+ 		IsStream:         info.IsStream,
+ 		Group:            info.UsingGroup,
+ 		Other:            other,
++		ModelRatio:       priceData.ModelRatio,
++		CompletionRatio:  priceData.CompletionRatio,
+ 	})
+ 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+ 	return testResult{
+diff --git a/model/log.go b/model/log.go
+index 68bc650..4ab61b3 100644
+--- a/model/log.go
++++ b/model/log.go
+@@ -147,6 +147,8 @@ type RecordConsumeLogParams struct {
+ 	IsStream         bool                   `json:"is_stream"`
+ 	Group            string                 `json:"group"`
+ 	Other            map[string]interface{} `json:"other"`
++	ModelRatio       float64                `json:"model_ratio"`
++	CompletionRatio  float64                `json:"completion_ratio"`
+ }
+ 
+ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+@@ -195,7 +197,22 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
+ 	}
+ 	if common.DataExportEnabled {
+ 		gopool.Go(func() {
+-			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
++			LogQuotaDataEx(LogQuotaDataParams{
++				UserId:           userId,
++				Username:         username,
++				ModelName:        params.ModelName,
++				Quota:            params.Quota,
++				CreatedAt:        common.GetTimestamp(),
++				PromptTokens:     params.PromptTokens,
++				CompletionTokens: params.CompletionTokens,
++				ChannelId:        params.ChannelId,
++				Group:            params.Group,
++				UseTimeMs:        params.UseTimeSeconds * 1000,
++				IsStream:         params.IsStream,
++				IsError:          false,
++				ModelRatio:       params.ModelRatio,
++				CompletionRatio:  params.CompletionRatio,
++			})
+ 		})
+ 	}
+ }
+diff --git a/model/usedata.go b/model/usedata.go
+index f0ea055..f07e8f4 100644
+--- a/model/usedata.go
++++ b/model/usedata.go
+@@ -19,6 +19,23 @@ type QuotaData struct {
+ 	TokenUsed int    `json:"token_used" gorm:"default:0"`
+ 	Count     int    `json:"count" gorm:"default:0"`
+ 	Quota     int    `json:"quota" gorm:"default:0"`
++
++	// --- 成本维度 ---
++	PromptTokens     int     `json:"prompt_tokens" gorm:"default:0"`
++	CompletionTokens int     `json:"completion_tokens" gorm:"default:0"`
++	ModelRatio       float64 `json:"model_ratio" gorm:"type:decimal(10,6);default:0"`
++	CompletionRatio  float64 `json:"completion_ratio" gorm:"type:decimal(10,6);default:0"`
++
++	// --- 模型维度 ---
++	ChannelId int    `json:"channel_id" gorm:"index;default:0"`
++	Group     string `json:"group" gorm:"index;size:64;default:''"`
++
++	// --- 时序数据 ---
++	AvgUseTime   int `json:"avg_use_time" gorm:"default:0"`   // 平均延迟（毫秒）
++	MaxUseTime   int `json:"max_use_time" gorm:"default:0"`   // 最大延迟（毫秒）
++	StreamCount  int `json:"stream_count" gorm:"default:0"`    // 流式请求次数
++	ErrorCount   int `json:"error_count" gorm:"default:0"`     // 错误次数
++	TotalUseTime int `json:"total_use_time" gorm:"default:0"`  // 总延迟用于计算平均值
+ }
+ 
+ func UpdateQuotaData() {
+@@ -34,34 +51,111 @@ func UpdateQuotaData() {
+ var CacheQuotaData = make(map[string]*QuotaData)
+ var CacheQuotaDataLock = sync.Mutex{}
+ 
+-func logQuotaDataCache(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int) {
+-	key := fmt.Sprintf("%d-%s-%s-%d", userId, username, modelName, createdAt)
++// LogQuotaDataParams holds the parameters for logging quota data
++type LogQuotaDataParams struct {
++	UserId           int
++	Username         string
++	ModelName        string
++	Quota            int
++	CreatedAt        int64
++	PromptTokens     int
++	CompletionTokens int
++	ChannelId        int
++	Group            string
++	UseTimeMs        int
++	IsStream         bool
++	IsError          bool
++	ModelRatio       float64
++	CompletionRatio  float64
++}
++
++func logQuotaDataCache(params LogQuotaDataParams) {
++	key := fmt.Sprintf("%d-%s-%s-%d-%d-%s", params.UserId, params.Username, params.ModelName, params.CreatedAt, params.ChannelId, params.Group)
++	tokenUsed := params.PromptTokens + params.CompletionTokens
+ 	quotaData, ok := CacheQuotaData[key]
+ 	if ok {
+ 		quotaData.Count += 1
+-		quotaData.Quota += quota
++		quotaData.Quota += params.Quota
+ 		quotaData.TokenUsed += tokenUsed
++		quotaData.PromptTokens += params.PromptTokens
++		quotaData.CompletionTokens += params.CompletionTokens
++		quotaData.TotalUseTime += params.UseTimeMs
++		if params.UseTimeMs > quotaData.MaxUseTime {
++			quotaData.MaxUseTime = params.UseTimeMs
++		}
++		if params.IsStream {
++			quotaData.StreamCount += 1
++		}
++		if params.IsError {
++			quotaData.ErrorCount += 1
++		}
++		// 重新计算平均延迟
++		if quotaData.Count > 0 {
++			quotaData.AvgUseTime = quotaData.TotalUseTime / quotaData.Count
++		}
++		// 使用最新的 ratio 值（同一模型在同一时间段内 ratio 通常一致）
++		quotaData.ModelRatio = params.ModelRatio
++		quotaData.CompletionRatio = params.CompletionRatio
+ 	} else {
++		streamCount := 0
++		if params.IsStream {
++			streamCount = 1
++		}
++		errorCount := 0
++		if params.IsError {
++			errorCount = 1
++		}
+ 		quotaData = &QuotaData{
+-			UserID:    userId,
+-			Username:  username,
+-			ModelName: modelName,
+-			CreatedAt: createdAt,
+-			Count:     1,
+-			Quota:     quota,
+-			TokenUsed: tokenUsed,
++			UserID:           params.UserId,
++			Username:         params.Username,
++			ModelName:        params.ModelName,
++			CreatedAt:        params.CreatedAt,
++			Count:            1,
++			Quota:            params.Quota,
++			TokenUsed:        tokenUsed,
++			PromptTokens:     params.PromptTokens,
++			CompletionTokens: params.CompletionTokens,
++			ChannelId:        params.ChannelId,
++			Group:            params.Group,
++			AvgUseTime:       params.UseTimeMs,
++			MaxUseTime:       params.UseTimeMs,
++			TotalUseTime:     params.UseTimeMs,
++			StreamCount:      streamCount,
++			ErrorCount:       errorCount,
++			ModelRatio:       params.ModelRatio,
++			CompletionRatio:  params.CompletionRatio,
+ 		}
+ 	}
+ 	CacheQuotaData[key] = quotaData
+ }
+ 
++// LogQuotaData is the legacy entry point maintained for backward compatibility.
++// New callers should use LogQuotaDataEx with LogQuotaDataParams.
+ func LogQuotaData(userId int, username string, modelName string, quota int, createdAt int64, tokenUsed int) {
+ 	// 只精确到小时
+ 	createdAt = createdAt - (createdAt % 3600)
+ 
+ 	CacheQuotaDataLock.Lock()
+ 	defer CacheQuotaDataLock.Unlock()
+-	logQuotaDataCache(userId, username, modelName, quota, createdAt, tokenUsed)
++	logQuotaDataCache(LogQuotaDataParams{
++		UserId:           userId,
++		Username:         username,
++		ModelName:        modelName,
++		Quota:            quota,
++		CreatedAt:        createdAt,
++		PromptTokens:     tokenUsed / 2, // 无法拆分时平分
++		CompletionTokens: tokenUsed - tokenUsed/2,
++	})
++}
++
++// LogQuotaDataEx is the enhanced entry point that accepts full parameters.
++func LogQuotaDataEx(params LogQuotaDataParams) {
++	// 只精确到小时
++	params.CreatedAt = params.CreatedAt - (params.CreatedAt % 3600)
++
++	CacheQuotaDataLock.Lock()
++	defer CacheQuotaDataLock.Unlock()
++	logQuotaDataCache(params)
+ }
+ 
+ func SaveQuotaDataCache() {
+@@ -74,14 +168,15 @@ func SaveQuotaDataCache() {
+ 	// 3. 如果没有数据，就插入数据
+ 	for _, quotaData := range CacheQuotaData {
+ 		quotaDataDB := &QuotaData{}
+-		DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
+-			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt).First(quotaDataDB)
++		DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ? and channel_id = ? and "+commonGroupCol+" = ?",
++			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.ChannelId, quotaData.Group).First(quotaDataDB)
+ 		if quotaDataDB.Id > 0 {
+-			//quotaDataDB.Count += quotaData.Count
+-			//quotaDataDB.Quota += quotaData.Quota
+-			//DB.Table("quota_data").Save(quotaDataDB)
+-			increaseQuotaData(quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.Count, quotaData.Quota, quotaData.CreatedAt, quotaData.TokenUsed)
++			increaseQuotaData(quotaData)
+ 		} else {
++			// 插入时计算 AvgUseTime
++			if quotaData.Count > 0 {
++				quotaData.AvgUseTime = quotaData.TotalUseTime / quotaData.Count
++			}
+ 			DB.Table("quota_data").Create(quotaData)
+ 		}
+ 	}
+@@ -89,28 +184,50 @@ func SaveQuotaDataCache() {
+ 	common.SysLog(fmt.Sprintf("保存数据看板数据成功，共保存%d条数据", size))
+ }
+ 
+-func increaseQuotaData(userId int, username string, modelName string, count int, quota int, createdAt int64, tokenUsed int) {
+-	err := DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
+-		userId, username, modelName, createdAt).Updates(map[string]interface{}{
+-		"count":      gorm.Expr("count + ?", count),
+-		"quota":      gorm.Expr("quota + ?", quota),
+-		"token_used": gorm.Expr("token_used + ?", tokenUsed),
+-	}).Error
++func increaseQuotaData(data *QuotaData) {
++	updates := map[string]interface{}{
++		"count":             gorm.Expr("count + ?", data.Count),
++		"quota":             gorm.Expr("quota + ?", data.Quota),
++		"token_used":        gorm.Expr("token_used + ?", data.TokenUsed),
++		"prompt_tokens":     gorm.Expr("prompt_tokens + ?", data.PromptTokens),
++		"completion_tokens": gorm.Expr("completion_tokens + ?", data.CompletionTokens),
++		"total_use_time":    gorm.Expr("total_use_time + ?", data.TotalUseTime),
++		"stream_count":      gorm.Expr("stream_count + ?", data.StreamCount),
++		"error_count":       gorm.Expr("error_count + ?", data.ErrorCount),
++	}
++
++	// 更新最大延迟（仅当新值更大时）
++	// CASE WHEN 在所有数据库中都兼容
++	updates["max_use_time"] = gorm.Expr("CASE WHEN max_use_time < ? THEN ? ELSE max_use_time END", data.MaxUseTime, data.MaxUseTime)
++
++	// 更新 model_ratio / completion_ratio（使用最新值）
++	updates["model_ratio"] = data.ModelRatio
++	updates["completion_ratio"] = data.CompletionRatio
++
++	err := DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ? and channel_id = ? and "+commonGroupCol+" = ?",
++		data.UserID, data.Username, data.ModelName, data.CreatedAt, data.ChannelId, data.Group).Updates(updates).Error
+ 	if err != nil {
+ 		common.SysLog(fmt.Sprintf("increaseQuotaData error: %s", err))
++		return
++	}
++
++	// 在应用层重新计算平均延迟
++	err = DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ? and channel_id = ? and "+commonGroupCol+" = ?",
++		data.UserID, data.Username, data.ModelName, data.CreatedAt, data.ChannelId, data.Group).
++		Update("avg_use_time", gorm.Expr("CASE WHEN count > 0 THEN total_use_time / count ELSE 0 END")).Error
++	if err != nil {
++		common.SysLog(fmt.Sprintf("increaseQuotaData avg_use_time error: %s", err))
+ 	}
+ }
+ 
+ func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+ 	var quotaDatas []*QuotaData
+-	// 从quota_data表中查询数据
+ 	err = DB.Table("quota_data").Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).Find(&quotaDatas).Error
+ 	return quotaDatas, err
+ }
+ 
+ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+ 	var quotaDatas []*QuotaData
+-	// 从quota_data表中查询数据
+ 	err = DB.Table("quota_data").Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).Find(&quotaDatas).Error
+ 	return quotaDatas, err
+ }
+@@ -118,7 +235,11 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData
+ func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+ 	var quotaDatas []*QuotaData
+ 	err = DB.Table("quota_data").
+-		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
++		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, "+
++			"sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, "+
++			"sum(stream_count) as stream_count, sum(error_count) as error_count, "+
++			"sum(total_use_time) as total_use_time, "+
++			"CASE WHEN sum(count) > 0 THEN sum(total_use_time) / sum(count) ELSE 0 END as avg_use_time").
+ 		Where("created_at >= ? and created_at <= ?", startTime, endTime).
+ 		Group("username, created_at").
+ 		Find(&quotaDatas).Error
+@@ -130,9 +251,15 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
+ 		return GetQuotaDataByUsername(username, startTime, endTime)
+ 	}
+ 	var quotaDatas []*QuotaData
+-	// 从quota_data表中查询数据
+-	// only select model_name, sum(count) as count, sum(quota) as quota, model_name, created_at from quota_data group by model_name, created_at;
+-	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
+-	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
++	err = DB.Table("quota_data").
++		Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, "+
++			"sum(prompt_tokens) as prompt_tokens, sum(completion_tokens) as completion_tokens, "+
++			"sum(stream_count) as stream_count, sum(error_count) as error_count, "+
++			"sum(total_use_time) as total_use_time, "+
++			"CASE WHEN sum(count) > 0 THEN sum(total_use_time) / sum(count) ELSE 0 END as avg_use_time, "+
++			"created_at").
++		Where("created_at >= ? and created_at <= ?", startTime, endTime).
++		Group("model_name, created_at").
++		Find(&quotaDatas).Error
+ 	return quotaDatas, err
+ }
+diff --git a/relay/mjproxy_handler.go b/relay/mjproxy_handler.go
+index ee48ca6..84773dc 100644
+--- a/relay/mjproxy_handler.go
++++ b/relay/mjproxy_handler.go
+@@ -233,14 +233,15 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
+ 			logContent := fmt.Sprintf("模型固定价格 %.2f，分组倍率 %.2f，操作 %s", priceData.ModelPrice, priceData.GroupRatioInfo.GroupRatio, constant.MjActionSwapFace)
+ 			other := service.GenerateMjOtherInfo(info, priceData)
+ 			model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
+-				ChannelId: info.ChannelId,
+-				ModelName: modelName,
+-				TokenName: tokenName,
+-				Quota:     priceData.Quota,
+-				Content:   logContent,
+-				TokenId:   info.TokenId,
+-				Group:     info.UsingGroup,
+-				Other:     other,
++				ChannelId:   info.ChannelId,
++				ModelName:   modelName,
++				TokenName:   tokenName,
++				Quota:       priceData.Quota,
++				Content:     logContent,
++				TokenId:     info.TokenId,
++				Group:       info.UsingGroup,
++				Other:       other,
++				ModelRatio:  priceData.ModelRatio,
+ 			})
+ 			model.UpdateUserUsedQuotaAndRequestCount(info.UserId, priceData.Quota)
+ 			model.UpdateChannelUsedQuota(info.ChannelId, priceData.Quota)
+@@ -539,14 +540,15 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
+ 			logContent := fmt.Sprintf("模型固定价格 %.2f，分组倍率 %.2f，操作 %s，ID %s", priceData.ModelPrice, priceData.GroupRatioInfo.GroupRatio, midjRequest.Action, midjResponse.Result)
+ 			other := service.GenerateMjOtherInfo(relayInfo, priceData)
+ 			model.RecordConsumeLog(c, relayInfo.UserId, model.RecordConsumeLogParams{
+-				ChannelId: relayInfo.ChannelId,
+-				ModelName: modelName,
+-				TokenName: tokenName,
+-				Quota:     priceData.Quota,
+-				Content:   logContent,
+-				TokenId:   relayInfo.TokenId,
+-				Group:     relayInfo.UsingGroup,
+-				Other:     other,
++				ChannelId:   relayInfo.ChannelId,
++				ModelName:   modelName,
++				TokenName:   tokenName,
++				Quota:       priceData.Quota,
++				Content:     logContent,
++				TokenId:     relayInfo.TokenId,
++				Group:       relayInfo.UsingGroup,
++				Other:       other,
++				ModelRatio:  priceData.ModelRatio,
+ 			})
+ 			model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, priceData.Quota)
+ 			model.UpdateChannelUsedQuota(relayInfo.ChannelId, priceData.Quota)
+diff --git a/service/quota.go b/service/quota.go
+index 9dc84ab..99e4d0f 100644
+--- a/service/quota.go
++++ b/service/quota.go
+@@ -232,6 +232,8 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
+ 		IsStream:         relayInfo.IsStream,
+ 		Group:            relayInfo.UsingGroup,
+ 		Other:            other,
++		ModelRatio:       modelRatio,
++		CompletionRatio:  completionRatio.InexactFloat64(),
+ 	})
+ }
+ 
+@@ -337,6 +339,8 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
+ 		IsStream:         relayInfo.IsStream,
+ 		Group:            relayInfo.UsingGroup,
+ 		Other:            other,
++		ModelRatio:       modelRatio,
++		CompletionRatio:  completionRatio.InexactFloat64(),
+ 	})
+ }
+ 
+diff --git a/service/task_billing.go b/service/task_billing.go
+index e5c406d..517462d 100644
+--- a/service/task_billing.go
++++ b/service/task_billing.go
+@@ -51,14 +51,16 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
+ 		other["upstream_model_name"] = info.UpstreamModelName
+ 	}
+ 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
+-		ChannelId: info.ChannelId,
+-		ModelName: info.OriginModelName,
+-		TokenName: tokenName,
+-		Quota:     info.PriceData.Quota,
+-		Content:   logContent,
+-		TokenId:   info.TokenId,
+-		Group:     info.UsingGroup,
+-		Other:     other,
++		ChannelId:       info.ChannelId,
++		ModelName:       info.OriginModelName,
++		TokenName:       tokenName,
++		Quota:           info.PriceData.Quota,
++		Content:         logContent,
++		TokenId:         info.TokenId,
++		Group:           info.UsingGroup,
++		Other:           other,
++		ModelRatio:      info.PriceData.ModelRatio,
++		CompletionRatio: info.PriceData.CompletionRatio,
+ 	})
+ 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
+ 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
+diff --git a/service/text_quota.go b/service/text_quota.go
+index 8caee8f..e82e21e 100644
+--- a/service/text_quota.go
++++ b/service/text_quota.go
+@@ -426,5 +426,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
+ 		IsStream:         relayInfo.IsStream,
+ 		Group:            relayInfo.UsingGroup,
+ 		Other:            other,
++		ModelRatio:       summary.ModelRatio,
++		CompletionRatio:  summary.CompletionRatio,
+ 	})
+ }
+-- 
+2.47.3
+
+
+From a1221a1577bb25dc66947b423999aee527dcadfa Mon Sep 17 00:00:00 2001
+From: zzstart2 <zzstart2@example.com>
+Date: Fri, 10 Apr 2026 15:01:23 +0800
+Subject: [PATCH 2/2] feat(T-008): add channel health check mechanism with
+ real-time monitoring
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Implements per-channel health monitoring that tracks response time,
+error rate, and availability from live relay traffic and periodic tests.
+
+New files:
+- model/channel_health.go: ChannelHealth persistence model (hourly buckets),
+  in-memory ChannelHealthSnapshot cache, RecordChannelRequest/RecordChannelDisable
+  collection APIs, FlushHealthCache for periodic DB persistence, aggregate query
+  functions, CalculateHealthScore (0-100 composite score), and 30-day auto-cleanup
+- controller/channel_health.go: GET /api/channel/health (overview with scoring)
+  and GET /api/channel/health/:id (hourly time-series history)
+
+Integration points:
+- controller/relay.go: Record success/failure metrics in Relay() and RelayTask()
+  loops via gopool.Go for zero-latency overhead on the request path
+- controller/channel-test.go: Record metrics from testAllChannels periodic tests
+- service/channel.go: Record disable events in DisableChannel
+- main.go: Start RunHealthDataFlusher background goroutine (same interval as
+  DataExportInterval, default 5 min)
+- model/main.go: Register ChannelHealth in both migrateDB and migrateDBFast
+- router/api-router.go: Wire health endpoints under /api/channel (AdminAuth)
+
+Design decisions:
+- Write-through cache pattern: hot path writes only to in-memory map (mutex-locked),
+  background flusher merges to DB every N minutes — zero DB pressure per request
+- Hourly time buckets for storage efficiency while preserving trend granularity
+- Aggregate queries use cross-DB-safe SQL (no CAST AS FLOAT, COALESCE for NULLs,
+  GROUP BY channel_id only with MAX for denormalized name/type)
+- Health score: 40pt error rate + 30pt latency + 30pt availability = 100
+---
+ controller/channel-test.go   |   5 +
+ controller/channel_health.go | 113 +++++++++++++
+ controller/relay.go          |  24 +++
+ main.go                      |   3 +
+ model/channel_health.go      | 315 +++++++++++++++++++++++++++++++++++
+ model/main.go                |   2 +
+ router/api-router.go         |   2 +
+ service/channel.go           |   1 +
+ 8 files changed, 465 insertions(+)
+ create mode 100644 controller/channel_health.go
+ create mode 100644 model/channel_health.go
+
+diff --git a/controller/channel-test.go b/controller/channel-test.go
+index b79bef6..c1a19b6 100644
+--- a/controller/channel-test.go
++++ b/controller/channel-test.go
+@@ -848,6 +848,11 @@ func testAllChannels(notify bool) error {
+ 				service.EnableChannel(channel.Id, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.Name)
+ 			}
+ 
++			// Record health metrics from test
++			isError := result.localErr != nil || newAPIError != nil
++			isTimeout := newAPIError != nil && (newAPIError.StatusCode == http.StatusGatewayTimeout || newAPIError.StatusCode == http.StatusRequestTimeout)
++			model.RecordChannelRequest(channel.Id, channel.Name, channel.Type, milliseconds, isError, isTimeout)
++
+ 			channel.UpdateResponseTime(milliseconds)
+ 			time.Sleep(common.RequestInterval)
+ 		}
+diff --git a/controller/channel_health.go b/controller/channel_health.go
+new file mode 100644
+index 0000000..591051f
+--- /dev/null
++++ b/controller/channel_health.go
+@@ -0,0 +1,113 @@
++package controller
++
++import (
++	"net/http"
++	"strconv"
++	"time"
++
++	"github.com/QuantumNous/new-api/common"
++	"github.com/QuantumNous/new-api/model"
++
++	"github.com/gin-gonic/gin"
++)
++
++// GetChannelHealthOverview returns health summaries for all channels in a time range.
++// Admin only. Query params: start_timestamp, end_timestamp (defaults to last 24h).
++func GetChannelHealthOverview(c *gin.Context) {
++	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
++	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
++
++	now := time.Now().Unix()
++	if endTimestamp == 0 {
++		endTimestamp = now
++	}
++	if startTimestamp == 0 {
++		startTimestamp = now - 86400 // default 24h
++	}
++
++	healthRecords, err := model.GetAllChannelHealthSummary(startTimestamp, endTimestamp)
++	if err != nil {
++		common.ApiError(c, err)
++		return
++	}
++
++	// Enrich with live channel status and scoring
++	summaries := make([]model.ChannelHealthSummary, 0, len(healthRecords))
++	for _, rec := range healthRecords {
++		var status int
++		var lastTestTime int64
++		var lastResponseTime int
++		ch, chErr := model.CacheGetChannel(rec.ChannelId)
++		if chErr == nil && ch != nil {
++			status = ch.Status
++			lastTestTime = ch.TestTime
++			lastResponseTime = ch.ResponseTime
++		}
++
++		var availability float64
++		if rec.RequestCount > 0 {
++			availability = float64(rec.SuccessCount) / float64(rec.RequestCount) * 100
++		}
++
++		score := model.CalculateHealthScore(rec.ErrorRate, rec.AvgLatencyMs, rec.DisableCount, rec.RequestCount)
++
++		summaries = append(summaries, model.ChannelHealthSummary{
++			ChannelId:        rec.ChannelId,
++			ChannelName:      rec.ChannelName,
++			ChannelType:      rec.ChannelType,
++			Status:           status,
++			RequestCount:     rec.RequestCount,
++			SuccessCount:     rec.SuccessCount,
++			ErrorCount:       rec.ErrorCount,
++			TimeoutCount:     rec.TimeoutCount,
++			DisableCount:     rec.DisableCount,
++			ErrorRate:        rec.ErrorRate,
++			AvgLatencyMs:     rec.AvgLatencyMs,
++			MaxLatencyMs:     rec.MaxLatencyMs,
++			MinLatencyMs:     rec.MinLatencyMs,
++			LastTestTime:     lastTestTime,
++			LastResponseTime: lastResponseTime,
++			Availability:     availability,
++			HealthScore:      score,
++		})
++	}
++
++	c.JSON(http.StatusOK, gin.H{
++		"success": true,
++		"message": "",
++		"data":    summaries,
++	})
++}
++
++// GetChannelHealthDetail returns hourly health history for a single channel.
++// Admin only. Path param: id. Query params: start_timestamp, end_timestamp.
++func GetChannelHealthDetail(c *gin.Context) {
++	channelId, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		common.ApiError(c, err)
++		return
++	}
++
++	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
++	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
++
++	now := time.Now().Unix()
++	if endTimestamp == 0 {
++		endTimestamp = now
++	}
++	if startTimestamp == 0 {
++		startTimestamp = now - 86400*7 // default 7 days
++	}
++
++	records, err := model.GetChannelHealthHistory(channelId, startTimestamp, endTimestamp)
++	if err != nil {
++		common.ApiError(c, err)
++		return
++	}
++
++	c.JSON(http.StatusOK, gin.H{
++		"success": true,
++		"message": "",
++		"data":    records,
++	})
++}
+diff --git a/controller/relay.go b/controller/relay.go
+index 593b31b..342bb36 100644
+--- a/controller/relay.go
++++ b/controller/relay.go
+@@ -221,12 +221,24 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+ 
+ 		if newAPIError == nil {
+ 			relayInfo.LastError = nil
++			// Record successful request for health monitoring
++			latencyMs := time.Since(relayInfo.StartTime).Milliseconds()
++			gopool.Go(func() {
++				model.RecordChannelRequest(channel.Id, channel.Name, channel.Type, latencyMs, false, false)
++			})
+ 			return
+ 		}
+ 
+ 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
+ 		relayInfo.LastError = newAPIError
+ 
++		// Record failed request for health monitoring
++		latencyMs := time.Since(relayInfo.StartTime).Milliseconds()
++		isTimeout := newAPIError.StatusCode == http.StatusGatewayTimeout || newAPIError.StatusCode == http.StatusRequestTimeout
++		gopool.Go(func() {
++			model.RecordChannelRequest(channel.Id, channel.Name, channel.Type, latencyMs, true, isTimeout)
++		})
++
+ 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+ 
+ 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
+@@ -542,9 +554,21 @@ func RelayTask(c *gin.Context) {
+ 
+ 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+ 		if taskErr == nil {
++			// Record successful task request
++			taskLatencyMs := time.Since(relayInfo.StartTime).Milliseconds()
++			gopool.Go(func() {
++				model.RecordChannelRequest(channel.Id, channel.Name, channel.Type, taskLatencyMs, false, false)
++			})
+ 			break
+ 		}
+ 
++		// Record failed task request
++		taskLatencyMs := time.Since(relayInfo.StartTime).Milliseconds()
++		taskIsTimeout := taskErr.StatusCode == http.StatusGatewayTimeout || taskErr.StatusCode == http.StatusRequestTimeout
++		gopool.Go(func() {
++			model.RecordChannelRequest(channel.Id, channel.Name, channel.Type, taskLatencyMs, true, taskIsTimeout)
++		})
++
+ 		if !taskErr.LocalError {
+ 			processChannelError(c,
+ 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
+diff --git a/main.go b/main.go
+index dbbf44a..cb8025f 100644
+--- a/main.go
++++ b/main.go
+@@ -106,6 +106,9 @@ func main() {
+ 
+ 	go controller.AutomaticallyTestChannels()
+ 
++	// Channel health data flusher (every 5 minutes)
++	go model.RunHealthDataFlusher(common.DataExportInterval)
++
+ 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
+ 	service.StartCodexCredentialAutoRefreshTask()
+ 
+diff --git a/model/channel_health.go b/model/channel_health.go
+new file mode 100644
+index 0000000..c0c9152
+--- /dev/null
++++ b/model/channel_health.go
+@@ -0,0 +1,315 @@
++package model
++
++import (
++	"fmt"
++	"sync"
++	"time"
++
++	"github.com/QuantumNous/new-api/common"
++)
++
++// ChannelHealth stores per-channel, per-hour aggregated health metrics.
++// GORM AutoMigrate creates/updates the table automatically.
++type ChannelHealth struct {
++	Id               int    `json:"id" gorm:"primaryKey;autoIncrement"`
++	ChannelId        int    `json:"channel_id" gorm:"index:idx_ch_channel_time,priority:1;not null"`
++	ChannelName      string `json:"channel_name" gorm:"size:128;default:''"`
++	ChannelType      int    `json:"channel_type" gorm:"default:0"`
++	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_ch_channel_time,priority:2;not null"`
++	RequestCount     int    `json:"request_count" gorm:"default:0"`
++	ErrorCount       int    `json:"error_count" gorm:"default:0"`
++	TotalLatencyMs   int64  `json:"total_latency_ms" gorm:"bigint;default:0"`
++	MaxLatencyMs     int64  `json:"max_latency_ms" gorm:"bigint;default:0"`
++	MinLatencyMs     int64  `json:"min_latency_ms" gorm:"bigint;default:0"`
++	SuccessCount     int    `json:"success_count" gorm:"default:0"`
++	TimeoutCount     int    `json:"timeout_count" gorm:"default:0"`
++	DisableCount     int    `json:"disable_count" gorm:"default:0"`
++	AvgLatencyMs     int64  `json:"avg_latency_ms" gorm:"bigint;default:0"`
++	ErrorRate        float64 `json:"error_rate" gorm:"type:decimal(6,4);default:0"`
++}
++
++// ChannelHealthSnapshot holds real-time health data kept in memory.
++type ChannelHealthSnapshot struct {
++	ChannelId      int
++	ChannelName    string
++	ChannelType    int
++	RequestCount   int
++	ErrorCount     int
++	SuccessCount   int
++	TimeoutCount   int
++	DisableCount   int
++	TotalLatencyMs int64
++	MaxLatencyMs   int64
++	MinLatencyMs   int64
++}
++
++// ChannelHealthSummary is the API response type for a single channel's health status.
++type ChannelHealthSummary struct {
++	ChannelId        int     `json:"channel_id"`
++	ChannelName      string  `json:"channel_name"`
++	ChannelType      int     `json:"channel_type"`
++	Status           int     `json:"status"`
++	RequestCount     int     `json:"request_count"`
++	SuccessCount     int     `json:"success_count"`
++	ErrorCount       int     `json:"error_count"`
++	TimeoutCount     int     `json:"timeout_count"`
++	DisableCount     int     `json:"disable_count"`
++	ErrorRate        float64 `json:"error_rate"`
++	AvgLatencyMs     int64   `json:"avg_latency_ms"`
++	MaxLatencyMs     int64   `json:"max_latency_ms"`
++	MinLatencyMs     int64   `json:"min_latency_ms"`
++	LastTestTime     int64   `json:"last_test_time"`
++	LastResponseTime int     `json:"last_response_time"`
++	Availability     float64 `json:"availability"`
++	HealthScore      int     `json:"health_score"`
++}
++
++// --- In-memory cache ---
++
++var (
++	healthCache     = make(map[int]*ChannelHealthSnapshot) // channelId -> snapshot
++	healthCacheLock sync.Mutex
++)
++
++// RecordChannelRequest records a single request outcome into the in-memory cache.
++func RecordChannelRequest(channelId int, channelName string, channelType int, latencyMs int64, isError bool, isTimeout bool) {
++	healthCacheLock.Lock()
++	defer healthCacheLock.Unlock()
++
++	snap, ok := healthCache[channelId]
++	if !ok {
++		snap = &ChannelHealthSnapshot{
++			ChannelId:    channelId,
++			ChannelName:  channelName,
++			ChannelType:  channelType,
++			MinLatencyMs: latencyMs,
++		}
++		healthCache[channelId] = snap
++	}
++
++	snap.RequestCount++
++	snap.TotalLatencyMs += latencyMs
++	if latencyMs > snap.MaxLatencyMs {
++		snap.MaxLatencyMs = latencyMs
++	}
++	if latencyMs < snap.MinLatencyMs || snap.MinLatencyMs == 0 {
++		snap.MinLatencyMs = latencyMs
++	}
++
++	if isError {
++		snap.ErrorCount++
++	} else {
++		snap.SuccessCount++
++	}
++	if isTimeout {
++		snap.TimeoutCount++
++	}
++}
++
++// RecordChannelDisable records a channel disable event.
++func RecordChannelDisable(channelId int) {
++	healthCacheLock.Lock()
++	defer healthCacheLock.Unlock()
++	if snap, ok := healthCache[channelId]; ok {
++		snap.DisableCount++
++	} else {
++		healthCache[channelId] = &ChannelHealthSnapshot{
++			ChannelId:    channelId,
++			DisableCount: 1,
++		}
++	}
++}
++
++// FlushHealthCache persists the in-memory snapshots to the database and resets the cache.
++// This should be called periodically (e.g., every 5 minutes).
++func FlushHealthCache() {
++	healthCacheLock.Lock()
++	cache := healthCache
++	healthCache = make(map[int]*ChannelHealthSnapshot)
++	healthCacheLock.Unlock()
++
++	if len(cache) == 0 {
++		return
++	}
++
++	now := time.Now().Unix()
++	hourBucket := now - (now % 3600)
++
++	for _, snap := range cache {
++		if snap.RequestCount == 0 && snap.DisableCount == 0 {
++			continue
++		}
++
++		var avgLatency int64
++		if snap.RequestCount > 0 {
++			avgLatency = snap.TotalLatencyMs / int64(snap.RequestCount)
++		}
++		var errorRate float64
++		if snap.RequestCount > 0 {
++			errorRate = float64(snap.ErrorCount) / float64(snap.RequestCount)
++		}
++
++		existing := &ChannelHealth{}
++		err := DB.Table("channel_healths").
++			Where("channel_id = ? AND created_at = ?", snap.ChannelId, hourBucket).
++			First(existing).Error
++
++		if err == nil && existing.Id > 0 {
++			// Merge into existing row
++			newTotal := existing.RequestCount + snap.RequestCount
++			var newAvg int64
++			if newTotal > 0 {
++				newAvg = (existing.TotalLatencyMs + snap.TotalLatencyMs) / int64(newTotal)
++			}
++			newErrors := existing.ErrorCount + snap.ErrorCount
++			var newErrorRate float64
++			if newTotal > 0 {
++				newErrorRate = float64(newErrors) / float64(newTotal)
++			}
++
++			newMax := existing.MaxLatencyMs
++			if snap.MaxLatencyMs > newMax {
++				newMax = snap.MaxLatencyMs
++			}
++			newMin := existing.MinLatencyMs
++			if snap.MinLatencyMs < newMin || newMin == 0 {
++				newMin = snap.MinLatencyMs
++			}
++
++			DB.Table("channel_healths").Where("id = ?", existing.Id).Updates(map[string]interface{}{
++				"request_count":   newTotal,
++				"error_count":     newErrors,
++				"success_count":   existing.SuccessCount + snap.SuccessCount,
++				"timeout_count":   existing.TimeoutCount + snap.TimeoutCount,
++				"disable_count":   existing.DisableCount + snap.DisableCount,
++				"total_latency_ms": existing.TotalLatencyMs + snap.TotalLatencyMs,
++				"max_latency_ms":  newMax,
++				"min_latency_ms":  newMin,
++				"avg_latency_ms":  newAvg,
++				"error_rate":      newErrorRate,
++			})
++		} else {
++			// Insert new row
++			record := &ChannelHealth{
++				ChannelId:      snap.ChannelId,
++				ChannelName:    snap.ChannelName,
++				ChannelType:    snap.ChannelType,
++				CreatedAt:      hourBucket,
++				RequestCount:   snap.RequestCount,
++				ErrorCount:     snap.ErrorCount,
++				SuccessCount:   snap.SuccessCount,
++				TimeoutCount:   snap.TimeoutCount,
++				DisableCount:   snap.DisableCount,
++				TotalLatencyMs: snap.TotalLatencyMs,
++				MaxLatencyMs:   snap.MaxLatencyMs,
++				MinLatencyMs:   snap.MinLatencyMs,
++				AvgLatencyMs:   avgLatency,
++				ErrorRate:      errorRate,
++			}
++			DB.Table("channel_healths").Create(record)
++		}
++	}
++	common.SysLog(fmt.Sprintf("flushed channel health data: %d channels", len(cache)))
++}
++
++// RunHealthDataFlusher starts the background loop that periodically flushes health data.
++// It also cleans up records older than 30 days once per hour.
++func RunHealthDataFlusher(intervalMinutes int) {
++	if intervalMinutes <= 0 {
++		intervalMinutes = 5
++	}
++	var cleanupTicker int
++	for {
++		time.Sleep(time.Duration(intervalMinutes) * time.Minute)
++		FlushHealthCache()
++
++		// Cleanup old records roughly once per hour
++		cleanupTicker += intervalMinutes
++		if cleanupTicker >= 60 {
++			cleanupTicker = 0
++			cutoff := time.Now().Unix() - 30*86400 // 30 days retention
++			deleted, err := DeleteOldChannelHealth(cutoff, 1000)
++			if err != nil {
++				common.SysLog(fmt.Sprintf("failed to cleanup old channel health data: %s", err))
++			} else if deleted > 0 {
++				common.SysLog(fmt.Sprintf("cleaned up %d old channel health records", deleted))
++			}
++		}
++	}
++}
++
++// --- Query functions ---
++
++// GetChannelHealthHistory returns hourly health records for a single channel.
++func GetChannelHealthHistory(channelId int, startTime int64, endTime int64) ([]*ChannelHealth, error) {
++	var records []*ChannelHealth
++	err := DB.Table("channel_healths").
++		Where("channel_id = ? AND created_at >= ? AND created_at <= ?", channelId, startTime, endTime).
++		Order("created_at ASC").
++		Find(&records).Error
++	return records, err
++}
++
++// GetAllChannelHealthSummary returns aggregated health for all channels in a time range.
++func GetAllChannelHealthSummary(startTime int64, endTime int64) ([]*ChannelHealth, error) {
++	var records []*ChannelHealth
++	err := DB.Table("channel_healths").
++		Select("channel_id, "+
++			"MAX(channel_name) as channel_name, "+
++			"MAX(channel_type) as channel_type, "+
++			"SUM(request_count) as request_count, "+
++			"SUM(error_count) as error_count, "+
++			"SUM(success_count) as success_count, "+
++			"SUM(timeout_count) as timeout_count, "+
++			"SUM(disable_count) as disable_count, "+
++			"SUM(total_latency_ms) as total_latency_ms, "+
++			"MAX(max_latency_ms) as max_latency_ms, "+
++			"COALESCE(MIN(CASE WHEN min_latency_ms > 0 THEN min_latency_ms END), 0) as min_latency_ms, "+
++			"CASE WHEN SUM(request_count) > 0 THEN SUM(total_latency_ms) / SUM(request_count) ELSE 0 END as avg_latency_ms, "+
++			"CASE WHEN SUM(request_count) > 0 THEN SUM(error_count) * 1.0 / SUM(request_count) ELSE 0 END as error_rate").
++		Where("created_at >= ? AND created_at <= ?", startTime, endTime).
++		Group("channel_id").
++		Find(&records).Error
++	return records, err
++}
++
++// DeleteOldChannelHealth cleans up health records older than the given timestamp.
++func DeleteOldChannelHealth(beforeTimestamp int64, batchSize int) (int64, error) {
++	result := DB.Where("created_at < ?", beforeTimestamp).Limit(batchSize).Delete(&ChannelHealth{})
++	return result.RowsAffected, result.Error
++}
++
++// CalculateHealthScore computes a 0-100 score from error rate, avg latency, and availability.
++// Higher is better.
++func CalculateHealthScore(errorRate float64, avgLatencyMs int64, disableCount int, requestCount int) int {
++	// Error rate component: 0% error = 40 points, 100% error = 0 points
++	errorScore := 40.0 * (1.0 - errorRate)
++
++	// Latency component: <500ms = 30 points, >5000ms = 0 points
++	latencyScore := 30.0
++	if avgLatencyMs > 500 {
++		latencyScore = 30.0 * (1.0 - float64(avgLatencyMs-500)/4500.0)
++		if latencyScore < 0 {
++			latencyScore = 0
++		}
++	}
++
++	// Availability component: no disables = 30 points
++	availScore := 30.0
++	if disableCount > 0 && requestCount > 0 {
++		disableRatio := float64(disableCount) / float64(requestCount) * 100 // amplify
++		availScore = 30.0 * (1.0 - disableRatio)
++		if availScore < 0 {
++			availScore = 0
++		}
++	}
++
++	score := int(errorScore + latencyScore + availScore)
++	if score < 0 {
++		score = 0
++	}
++	if score > 100 {
++		score = 100
++	}
++	return score
++}
+diff --git a/model/main.go b/model/main.go
+index f37cb66..c88451a 100644
+--- a/model/main.go
++++ b/model/main.go
+@@ -280,6 +280,7 @@ func migrateDB() error {
+ 		&SubscriptionPreConsumeRecord{},
+ 		&CustomOAuthProvider{},
+ 		&UserOAuthBinding{},
++		&ChannelHealth{},
+ 	)
+ 	if err != nil {
+ 		return err
+@@ -328,6 +329,7 @@ func migrateDBFast() error {
+ 		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
+ 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
+ 		{&UserOAuthBinding{}, "UserOAuthBinding"},
++		{&ChannelHealth{}, "ChannelHealth"},
+ 	}
+ 	// 动态计算migration数量，确保errChan缓冲区足够大
+ 	errChan := make(chan error, len(migrations))
+diff --git a/router/api-router.go b/router/api-router.go
+index acc2241..5873aaa 100644
+--- a/router/api-router.go
++++ b/router/api-router.go
+@@ -245,6 +245,8 @@ func SetApiRouter(router *gin.Engine) {
+ 			channelRoute.POST("/upstream_updates/apply_all", controller.ApplyAllChannelUpstreamModelUpdates)
+ 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
+ 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
++			channelRoute.GET("/health", controller.GetChannelHealthOverview)
++			channelRoute.GET("/health/:id", controller.GetChannelHealthDetail)
+ 		}
+ 		tokenRoute := apiRouter.Group("/token")
+ 		tokenRoute.Use(middleware.UserAuth())
+diff --git a/service/channel.go b/service/channel.go
+index 96bc1ef..c31c09e 100644
+--- a/service/channel.go
++++ b/service/channel.go
+@@ -29,6 +29,7 @@ func DisableChannel(channelError types.ChannelError, reason string) {
+ 
+ 	success := model.UpdateChannelStatus(channelError.ChannelId, channelError.UsingKey, common.ChannelStatusAutoDisabled, reason)
+ 	if success {
++		model.RecordChannelDisable(channelError.ChannelId)
+ 		subject := fmt.Sprintf("通道「%s」（#%d）已被禁用", channelError.ChannelName, channelError.ChannelId)
+ 		content := fmt.Sprintf("通道「%s」（#%d）已被禁用，原因：%s", channelError.ChannelName, channelError.ChannelId, reason)
+ 		NotifyRootUser(formatNotifyType(channelError.ChannelId, common.ChannelStatusAutoDisabled), subject, content)
+-- 
+2.47.3
+

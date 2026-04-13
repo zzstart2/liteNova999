@@ -1,0 +1,97 @@
+/* liteNova999 Design System — Modern CSS Reset */
+
+/*
+ * Based on Andy Bell's modern reset + Josh Comeau's custom reset.
+ * Minimal, non-opinionated base for consistent cross-browser rendering.
+ */
+
+/* Box sizing rules */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Remove default margin and padding */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+/* Prevent font size inflation on mobile */
+html {
+  -moz-text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+/* Remove list styles on ul, ol with a list role */
+ul[role='list'],
+ol[role='list'] {
+  list-style: none;
+}
+
+/* Core body defaults */
+body {
+  min-height: 100vh;
+  line-height: var(--leading-normal, 1.5);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Set shorter line heights on headings and interactive elements */
+h1, h2, h3, h4,
+button, input, label {
+  line-height: var(--leading-tight, 1.25);
+}
+
+/* Balance text wrapping on headings */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+
+/* Responsive images and media */
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Inherit fonts for inputs and buttons */
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Remove default button styles */
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Text area without horizontal resize */
+textarea:not([rows]) {
+  min-height: 10em;
+}
+
+/* Anchor styling */
+a {
+  color: inherit;
+  text-decoration-skip-ink: auto;
+}
+
+/* Anything with an anchor target should have extra scroll margin */
+:target {
+  scroll-margin-block: 5ex;
+}
+
+/* Remove all animations and transitions for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
