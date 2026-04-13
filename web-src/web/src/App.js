@@ -29,6 +29,9 @@ import Dashboard from './pages/Dashboard';
 
 const Home = lazy(() => import('./pages/Home'));
 const About = lazy(() => import('./pages/About'));
+const ChannelHealth = lazy(() => import('./pages/ChannelHealth'));
+const ApiDocs = lazy(() => import('./pages/ApiDocs'));
+const Landing = lazy(() => import('./pages/Landing'));
 
 function App() {
   const [userState, userDispatch] = useContext(UserContext);
@@ -304,6 +307,32 @@ function App() {
           <PrivateRoute>
             <Dashboard />
           </PrivateRoute>
+        }
+      />
+      <Route
+        path='/channel-health'
+        element={
+          <PrivateRoute>
+            <Suspense fallback={<Loading></Loading>}>
+              <ChannelHealth />
+            </Suspense>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path='/api-docs'
+        element={
+          <Suspense fallback={<Loading></Loading>}>
+            <ApiDocs />
+          </Suspense>
+        }
+      />
+      <Route
+        path='/landing'
+        element={
+          <Suspense fallback={<Loading></Loading>}>
+            <Landing />
+          </Suspense>
         }
       />
       <Route path='*' element={<NotFound />} />

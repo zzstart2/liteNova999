@@ -8,6 +8,8 @@
     "user": "User",
     "dashboard": "Dashboard",
     "log": "Log",
+    "health": "Channel Health",
+    "apidocs": "API Docs",
     "setting": "Settings",
     "about": "About",
     "chat": "Chat",

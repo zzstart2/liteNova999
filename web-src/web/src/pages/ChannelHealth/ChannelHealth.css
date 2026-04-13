@@ -1,0 +1,11 @@
+.channel-health-container {
+  padding: 20px 0;
+}
+
+.channel-health-container .ui.progress {
+  margin-bottom: 4px !important;
+}
+
+.channel-health-container .ui.table td {
+  vertical-align: middle;
+}

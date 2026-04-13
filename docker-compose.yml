@@ -1,6 +1,9 @@
 services:
   one-api:
-    image: justsong/one-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: litenova999:latest
     container_name: one-api
     restart: always
     ports:
@@ -11,6 +14,11 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - TZ=Asia/Shanghai
       - INITIAL_ROOT_TOKEN=sk-admin-qwen-proxy-2026
+      - MEMORY_CACHE_ENABLED=true
+      - SYNC_FREQUENCY=60
+      - ENABLE_METRIC=true
+      - METRIC_QUEUE_SIZE=10
+      - METRIC_SUCCESS_RATE_THRESHOLD=0.8
     depends_on:
       db:
         condition: service_healthy

@@ -60,6 +60,17 @@ let headerButtons = [
     icon: 'book',
   },
   {
+    name: 'header.health',
+    to: '/channel-health',
+    icon: 'heartbeat',
+    admin: true,
+  },
+  {
+    name: 'header.apidocs',
+    to: '/api-docs',
+    icon: 'book',
+  },
+  {
     name: 'header.setting',
     to: '/setting',
     icon: 'setting',

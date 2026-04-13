@@ -20,3 +20,6 @@ node_modules/
 
 # Docker volumes (local data)
 data/
+
+# One-API source (cloned separately during build)
+backend/one-api/

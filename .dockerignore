@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+docs
+team
+design
+frontend
+scripts
+*.md
+!README.md
+.env
+.env.*
+.claude

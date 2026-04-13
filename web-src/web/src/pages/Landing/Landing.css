@@ -1,0 +1,81 @@
+.landing-page {
+  margin: -14px -20px;
+}
+
+.hero-section {
+  padding: 80px 0 !important;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+}
+
+.hero-title {
+  font-size: 3.5rem !important;
+  font-weight: 800 !important;
+  margin-bottom: 16px !important;
+  background: linear-gradient(135deg, #6366f1, #22d3ee);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+  font-size: 1.4rem !important;
+  font-weight: 400 !important;
+  opacity: 0.9;
+  margin-bottom: 12px !important;
+}
+
+.hero-desc {
+  font-size: 1.1rem;
+  opacity: 0.7;
+  margin-bottom: 32px !important;
+}
+
+.hero-buttons .button {
+  margin: 4px 8px !important;
+}
+
+.features-section {
+  padding: 60px 0 !important;
+}
+
+.feature-card {
+  min-height: 200px !important;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.pricing-section {
+  padding: 60px 0 !important;
+  background: #f9fafb !important;
+}
+
+.price-tag {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 16px 0;
+}
+
+.popular-badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  background: #6366f1;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 0 4px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.faq-section {
+  padding: 60px 0 !important;
+}
+
+.cta-section {
+  padding: 60px 0 !important;
+  background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%) !important;
+}
