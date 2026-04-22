@@ -68,7 +68,7 @@ func RelayPassthrough(c *gin.Context) {
 	retryTimes := 2 // passthrough retries
 
 	for i := retryTimes; i > 0; i-- {
-		channel, err := dbmodel.CacheGetRandomSatisfiedChannelSmart(group, originalModel, triedChannels)
+		channel, err := dbmodel.CacheGetRandomSatisfiedChannelSmart(group, originalModel, triedChannels, monitor.GetHealthMultiplier)
 		if err != nil {
 			logger.Errorf(ctx, "passthrough retry: no available channel: %+v", err)
 			break

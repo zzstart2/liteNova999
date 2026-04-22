@@ -5,18 +5,21 @@ import (
 	"math/rand"
 
 	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/monitor"
 )
 
 // T-009: Smart fallback — health-aware channel selection with tried-channel exclusion
+
+// HealthMultiplierFunc returns a weight multiplier (0.0-1.0) for a channel.
+// This breaks the import cycle between model and monitor packages.
+type HealthMultiplierFunc func(channelId int) float64
 
 // CacheGetRandomSatisfiedChannelSmart selects a channel with:
 // 1. Exclusion of already-tried channels (prevents retry on same failed channel)
 // 2. Health-aware weighted random selection (healthy channels get more traffic)
 // 3. Circuit breaker integration (open circuits get no traffic)
 //
-// Falls back to CacheGetRandomSatisfiedChannel when health features are disabled.
-func CacheGetRandomSatisfiedChannelSmart(group string, model string, excludeIds map[int]bool) (*Channel, error) {
+// healthFn can be nil to skip health-aware selection.
+func CacheGetRandomSatisfiedChannelSmart(group string, model string, excludeIds map[int]bool, healthFn HealthMultiplierFunc) (*Channel, error) {
 	if !config.MemoryCacheEnabled {
 		return GetRandomSatisfiedChannel(group, model, false)
 	}
@@ -65,7 +68,10 @@ func CacheGetRandomSatisfiedChannelSmart(group string, model string, excludeIds 
 			}
 
 			// Get health multiplier (0.0 for open circuit, 0.05 for half-open, 0.1-1.0 for closed)
-			multiplier := monitor.GetHealthMultiplier(ch.Id)
+			multiplier := 1.0
+			if healthFn != nil {
+				multiplier = healthFn(ch.Id)
+			}
 			if multiplier <= 0 {
 				continue // circuit open, skip entirely
 			}
@@ -73,8 +79,6 @@ func CacheGetRandomSatisfiedChannelSmart(group string, model string, excludeIds 
 			w := multiplier
 			if ch.Weight != nil && *ch.Weight > 0 {
 				w *= float64(*ch.Weight)
-			} else {
-				w *= 1.0 // default weight
 			}
 
 			candidates = append(candidates, candidate{channel: ch, weight: w})

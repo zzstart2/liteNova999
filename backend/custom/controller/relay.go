@@ -83,7 +83,7 @@ func Relay(c *gin.Context) {
 
 	for i := retryTimes; i > 0; i-- {
 		// Use smart channel selection with exclusion and health-aware weights
-		channel, err := dbmodel.CacheGetRandomSatisfiedChannelSmart(group, originalModel, triedChannels)
+		channel, err := dbmodel.CacheGetRandomSatisfiedChannelSmart(group, originalModel, triedChannels, monitor.GetHealthMultiplier)
 		if err != nil {
 			logger.Errorf(ctx, "CacheGetRandomSatisfiedChannelSmart failed: %+v", err)
 			break

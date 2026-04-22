@@ -72,10 +72,10 @@ function App() {
           );
         }
       } else {
-        showError(message || '无法正常连接至服务器！');
+        console.warn('Status API:', message || 'unavailable');
       }
     } catch (error) {
-      showError(error.message || '无法正常连接至服务器！');
+      console.warn('Status API error:', error.message);
     }
   };
 

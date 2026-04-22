@@ -8,6 +8,10 @@ export const API = axios.create({
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    showError(error);
+    if (error.response) {
+      return Promise.reject(error);
+    }
+    // Network error (no backend) — reject silently
+    return Promise.reject(error);
   }
 );

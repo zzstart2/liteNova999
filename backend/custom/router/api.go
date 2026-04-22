@@ -86,6 +86,8 @@ func SetApiRouter(router *gin.Engine) {
 			// T-008: Health check endpoints
 			channelRoute.GET("/health", controller.GetAllChannelsHealth)
 			channelRoute.GET("/health/:id", controller.GetChannelHealth)
+			// Provider grouping API
+			channelRoute.GET("/providers", controller.GetProviders)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())

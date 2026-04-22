@@ -14,34 +14,37 @@ const Home = () => {
   const [userState] = useContext(UserContext);
 
   const displayNotice = async () => {
-    const res = await API.get('/api/notice');
-    const { success, message, data } = res.data;
-    if (success) {
-      let oldNotice = localStorage.getItem('notice');
-      if (data !== oldNotice && data !== '') {
-        const htmlNotice = marked(data);
-        showNotice(htmlNotice, true);
-        localStorage.setItem('notice', data);
+    try {
+      const res = await API.get('/api/notice');
+      const { success, data } = res.data || {};
+      if (success && data) {
+        let oldNotice = localStorage.getItem('notice');
+        if (data !== oldNotice && data !== '') {
+          const htmlNotice = marked(data);
+          showNotice(htmlNotice, true);
+          localStorage.setItem('notice', data);
+        }
       }
-    } else {
-      showError(message);
+    } catch (e) {
+      // API not available, ignore silently
     }
   };
 
   const displayHomePageContent = async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
-    const res = await API.get('/api/home_page_content');
-    const { success, message, data } = res.data;
-    if (success) {
-      let content = data;
-      if (!data.startsWith('https://')) {
-        content = marked.parse(data);
+    try {
+      const res = await API.get('/api/home_page_content');
+      const { success, data } = res.data || {};
+      if (success && data) {
+        let content = data;
+        if (!data.startsWith('https://')) {
+          content = marked.parse(data);
+        }
+        setHomePageContent(content);
+        localStorage.setItem('home_page_content', content);
       }
-      setHomePageContent(content);
-      localStorage.setItem('home_page_content', content);
-    } else {
-      showError(message);
-      setHomePageContent('');
+    } catch (e) {
+      // API not available, ignore silently
     }
     setHomePageContentLoaded(true);
   };
@@ -71,7 +74,7 @@ const Home = () => {
   }
 
   return (
-    <div style={{ margin: '0 -20px' }}>
+    <div className="full-width-page">
       {/* Hero Section */}
       <div className="litenova-hero">
         <div className="litenova-hero-content">
@@ -88,7 +91,7 @@ const Home = () => {
           <div className="litenova-hero-actions">
             {userState.user ? (
               <Link to="/token" className="litenova-btn-primary">
-                🔑 管理令牌
+                🔑 管理 API 密钥
               </Link>
             ) : (
               <Link to="/register" className="litenova-btn-primary">
@@ -215,23 +218,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="litenova-footer">
-        <div className="litenova-footer-brand">LiteNova</div>
-        <p style={{ margin: '8px 0', fontSize: '14px' }}>
-          智能 API 中转平台 — 让 AI 接入更简单
-        </p>
-        <div className="litenova-footer-links">
-          <Link to="/about" style={{ color: '#22d3ee' }}>关于我们</Link>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <a href="mailto:support@litenova.ai" style={{ color: '#22d3ee' }}>联系支持</a>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <Link to="/register" style={{ color: '#22d3ee' }}>免费注册</Link>
-        </div>
-        <div className="litenova-footer-copy">
-          © 2026 LiteNova. All rights reserved.
-        </div>
-      </div>
     </div>
   );
 };

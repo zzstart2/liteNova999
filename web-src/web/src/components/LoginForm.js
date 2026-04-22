@@ -3,9 +3,7 @@ import {
   Button,
   Divider,
   Form,
-  Grid,
   Header,
-  Message,
   Modal,
   Image,
   Card,
@@ -25,33 +23,61 @@ const LoginForm = () => {
     wechat_verification_code: '',
   });
   const [searchParams] = useSearchParams();
-  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { username, password } = inputs;
   const [userState, userDispatch] = useContext(UserContext);
-  let navigate = useNavigate();
+  const navigate = useNavigate();
   const [status, setStatus] = useState({});
+  const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('expired')) {
       showError(t('messages.error.login_expired'));
     }
-    let status = localStorage.getItem('status');
-    if (status) {
-      status = JSON.parse(status);
-      setStatus(status);
-    }
+    let s = localStorage.getItem('status');
+    if (s) setStatus(JSON.parse(s));
   }, []);
 
-  const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setInputs((prev) => ({ ...prev, [name]: value }));
+  }
 
-  const onWeChatLoginClicked = () => {
-    setShowWeChatLoginModal(true);
-  };
+  async function handleSubmit() {
+    if (!username || !password) {
+      showError('请输入用户名和密码');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await API.post('/api/user/login', { username, password });
+      const { success, message, data } = res.data;
+      if (success) {
+        userDispatch({ type: 'login', payload: data });
+        localStorage.setItem('user', JSON.stringify(data));
+        showSuccess(t('messages.success.login'));
+        if (username === 'root' && password === '123456') {
+          navigate('/user/edit');
+          showWarning(t('messages.error.root_password'));
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      showError(err.message || '登录失败');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') handleSubmit();
+  }
 
   const onSubmitWeChatVerificationCode = async () => {
-    const res = await API.get(
-      `/api/oauth/wechat?code=${inputs.wechat_verification_code}`
-    );
+    const res = await API.get(`/api/oauth/wechat?code=${inputs.wechat_verification_code}`);
     const { success, message, data } = res.data;
     if (success) {
       userDispatch({ type: 'login', payload: data });
@@ -64,226 +90,110 @@ const LoginForm = () => {
     }
   };
 
-  function handleChange(e) {
-    const { name, value } = e.target;
-    setInputs((inputs) => ({ ...inputs, [name]: value }));
-  }
-
-  async function handleSubmit(e) {
-    setSubmitted(true);
-    if (username && password) {
-      const res = await API.post(`/api/user/login`, {
-        username,
-        password,
-      });
-      const { success, message, data } = res.data;
-      if (success) {
-        userDispatch({ type: 'login', payload: data });
-        localStorage.setItem('user', JSON.stringify(data));
-        if (username === 'root' && password === '123456') {
-          navigate('/user/edit');
-          showSuccess(t('messages.success.login'));
-          showWarning(t('messages.error.root_password'));
-        } else {
-          navigate('/token');
-          showSuccess(t('messages.success.login'));
-        }
-      } else {
-        showError(message);
-      }
-    }
-  }
-
   return (
-    <Grid textAlign='center' style={{ marginTop: '48px' }}>
-      <Grid.Column style={{ maxWidth: 450 }}>
-        <Card
-          fluid
-          className='chart-card'
-          style={{ 
-            boxShadow: '0 4px 24px rgba(99, 102, 241, 0.12)',
-            borderRadius: '16px',
-            border: '1px solid rgba(99,102,241,0.08)',
-          }}
-        >
-          <Card.Content style={{ padding: '2.5em 2em' }}>
-            <Card.Header>
-              <Header
-                as='h2'
-                textAlign='center'
-                style={{ marginBottom: '1.5em' }}
-              >
-                <div className="litenova-auth-logo" style={{ marginBottom: '12px' }}>
-                  <div className="litenova-auth-logo-icon">L</div>
-                  <span className="litenova-auth-logo-text">LiteNova</span>
-                </div>
-                <Header.Content style={{ color: '#64748b', fontSize: '16px', fontWeight: 400 }}>
-                  {t('auth.login.title')}
-                </Header.Content>
-              </Header>
-            </Card.Header>
-            <Form size='large'>
-              <Form.Input
-                fluid
-                icon='user'
-                iconPosition='left'
-                placeholder={t('auth.login.username')}
-                name='username'
-                value={username}
-                onChange={handleChange}
-                style={{ marginBottom: '1em' }}
-              />
-              <Form.Input
-                fluid
-                icon='lock'
-                iconPosition='left'
-                placeholder={t('auth.login.password')}
-                name='password'
-                type='password'
-                value={password}
-                onChange={handleChange}
-                style={{ marginBottom: '1.5em' }}
-              />
-              <Button
-                fluid
-                size='large'
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                  color: 'white',
-                  marginBottom: '1.5em',
-                  borderRadius: '10px',
-                  fontWeight: 600,
-                  boxShadow: '0 2px 12px rgba(99, 102, 241, 0.3)',
-                }}
-                onClick={handleSubmit}
-              >
-                {t('auth.login.button')}
-              </Button>
-            </Form>
+    <>
+      <Card className='auth-card'>
+        <Card.Content>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div className='litenova-auth-logo' style={{ marginBottom: 8 }}>
+              <div className='litenova-auth-logo-icon'>L</div>
+              <span className='litenova-auth-logo-text'>LiteNova</span>
+            </div>
+            <p style={{ color: '#64748b', fontSize: 15, margin: 0 }}>
+              {t('auth.login.title')}
+            </p>
+          </div>
 
-            <Divider />
-            <Message style={{ background: 'transparent', boxShadow: 'none' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '0.9em',
-                  color: '#64748b',
-                }}
-              >
-                <div>
-                  {t('auth.login.forgot_password')}
-                  <Link
-                    to='/reset'
-                    style={{ color: '#6366f1', marginLeft: '2px' }}
-                  >
-                    {t('auth.login.reset_password')}
-                  </Link>
-                </div>
-                <div>
-                  {t('auth.login.no_account')}
-                  <Link
-                    to='/register'
-                    style={{ color: '#6366f1', marginLeft: '2px' }}
-                  >
-                    {t('auth.login.register')}
-                  </Link>
-                </div>
-              </div>
-            </Message>
+          <Form size='large' onKeyDown={handleKeyDown}>
+            <Form.Input
+              fluid
+              icon='user'
+              iconPosition='left'
+              placeholder={t('auth.login.username')}
+              name='username'
+              value={username}
+              onChange={handleChange}
+              style={{ marginBottom: 12 }}
+            />
+            <Form.Input
+              fluid
+              icon='lock'
+              iconPosition='left'
+              placeholder={t('auth.login.password')}
+              name='password'
+              type='password'
+              value={password}
+              onChange={handleChange}
+              style={{ marginBottom: 20 }}
+            />
+            <Button
+              fluid
+              size='large'
+              className={`auth-btn ${loading ? 'loading' : ''}`}
+              onClick={handleSubmit}
+              loading={loading}
+              disabled={loading}
+            >
+              {t('auth.login.button')}
+            </Button>
+          </Form>
 
-            {/* Only show WeChat and Lark login, hide GitHub */}
-            {(status.wechat_login || status.lark_client_id) && (
-              <>
-                <Divider
-                  horizontal
-                  style={{ color: '#94a3b8', fontSize: '0.9em' }}
-                >
-                  {t('auth.login.other_methods')}
-                </Divider>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    gap: '1em',
-                    marginTop: '1em',
-                  }}
-                >
-                  {status.wechat_login && (
-                    <Button
-                      circular
-                      color='green'
-                      icon='wechat'
-                      onClick={onWeChatLoginClicked}
-                    />
-                  )}
-                  {status.lark_client_id && (
-                    <div
-                      style={{
-                        background: 'radial-gradient(circle, #FFFFFF, #FFFFFF)',
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10em',
-                        display: 'flex',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => onLarkOAuthClicked(status.lark_client_id)}
-                    >
-                      <Image
-                        src={larkIcon}
-                        avatar
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          cursor: 'pointer',
-                          margin: 'auto',
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </Card.Content>
-        </Card>
-        <Modal
-          onClose={() => setShowWeChatLoginModal(false)}
-          onOpen={() => setShowWeChatLoginModal(true)}
-          open={showWeChatLoginModal}
-          size={'mini'}
-        >
-          <Modal.Content>
-            <Modal.Description>
-              <Image src={status.wechat_qrcode} fluid />
-              <div style={{ textAlign: 'center' }}>
-                <p>{t('auth.login.wechat.scan_tip')}</p>
+          <div className='auth-links' style={{ marginTop: 20 }}>
+            <div>
+              <Link to='/reset'>{t('auth.login.reset_password')}</Link>
+            </div>
+            <div>
+              {t('auth.login.no_account')}
+              <Link to='/register'>{t('auth.login.register')}</Link>
+            </div>
+          </div>
+
+          {(status.wechat_login || status.lark_client_id) && (
+            <>
+              <Divider horizontal style={{ color: '#94a3b8', fontSize: '0.85em', margin: '20px 0 16px' }}>
+                {t('auth.login.other_methods')}
+              </Divider>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+                {status.wechat_login && (
+                  <Button circular color='green' icon='wechat' onClick={() => setShowWeChatLoginModal(true)} />
+                )}
+                {status.lark_client_id && (
+                  <div
+                    style={{ width: 36, height: 36, borderRadius: '50%', background: '#fff', display: 'flex', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}
+                    onClick={() => onLarkOAuthClicked(status.lark_client_id)}
+                  >
+                    <Image src={larkIcon} avatar style={{ width: 36, height: 36, margin: 'auto' }} />
+                  </div>
+                )}
               </div>
-              <Form size='large'>
-                <Form.Input
-                  fluid
-                  placeholder={t('auth.login.wechat.code_placeholder')}
-                  name='wechat_verification_code'
-                  value={inputs.wechat_verification_code}
-                  onChange={handleChange}
-                />
-                <Button
-                  fluid
-                  size='large'
-                  style={{
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                    color: 'white',
-                    marginBottom: '1.5em',
-                  }}
-                  onClick={onSubmitWeChatVerificationCode}
-                >
-                  {t('auth.login.button')}
-                </Button>
-              </Form>
-            </Modal.Description>
-          </Modal.Content>
-        </Modal>
-      </Grid.Column>
-    </Grid>
+            </>
+          )}
+        </Card.Content>
+      </Card>
+
+      <Modal
+        onClose={() => setShowWeChatLoginModal(false)}
+        open={showWeChatLoginModal}
+        size='mini'
+      >
+        <Modal.Content>
+          <Image src={status.wechat_qrcode} fluid />
+          <p style={{ textAlign: 'center', margin: '12px 0' }}>{t('auth.login.wechat.scan_tip')}</p>
+          <Form size='large'>
+            <Form.Input
+              fluid
+              placeholder={t('auth.login.wechat.code_placeholder')}
+              name='wechat_verification_code'
+              value={inputs.wechat_verification_code}
+              onChange={handleChange}
+            />
+            <Button fluid size='large' className='auth-btn' onClick={onSubmitWeChatVerificationCode}>
+              {t('auth.login.button')}
+            </Button>
+          </Form>
+        </Modal.Content>
+      </Modal>
+    </>
   );
 };
 
