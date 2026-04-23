@@ -50,20 +50,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-staging:
-    name: Deploy to Staging
+  deploy:
+    name: Deploy to ECS
     needs: release
     runs-on: ubuntu-latest
-    environment: staging
+    environment: production
     steps:
+      - uses: actions/checkout@v4
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          host: ${{ secrets.ECS_HOST }}
+          username: root
+          key: ${{ secrets.ECS_SSH_KEY }}
           script: |
-            cd /opt/new-api
-            docker compose pull
+            cd /root/liteNova999
+            docker compose build
             docker compose up -d --remove-orphans
-            docker compose exec -T new-api wget -q -O - http://localhost:3000/api/status || exit 1
+            sleep 30
+            curl -sf http://localhost:3000/api/status || exit 1
+            echo "Deploy OK"
