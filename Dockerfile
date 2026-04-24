@@ -1,5 +1,12 @@
 # LiteNova999: Custom One-API build
-# Frontend is pre-built locally to save server memory
+
+# Stage 0: Build frontend
+FROM node:20-alpine AS fe-builder
+WORKDIR /fe
+COPY web-src/web/package.json web-src/web/package-lock.json ./
+RUN npm ci --legacy-peer-deps
+COPY web-src/web/ ./
+RUN CI=false npm run build
 
 # Stage 1: Build Go binary with custom modifications
 FROM golang:alpine AS go-builder
@@ -26,9 +33,9 @@ COPY ./backend/custom/relay/adaptor/passthrough/ ./relay/adaptor/passthrough/
 COPY ./backend/custom/router/relay.go ./router/relay.go
 COPY ./backend/custom/router/api.go ./router/api.go
 
-# Copy pre-built frontend into the "default" theme directory
+# Copy frontend build from fe-builder
 RUN mkdir -p ./web/build/default
-COPY ./web-src/web/build/ ./web/build/default/
+COPY --from=fe-builder /fe/build/ ./web/build/default/
 
 # Download Go dependencies
 RUN go mod download
